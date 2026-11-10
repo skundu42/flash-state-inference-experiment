@@ -7,6 +7,16 @@ Qwen3.8-Flash-Next, Nemotron 3 Super and Kimi-K3.1-Pro using B200 and GB300 GPUs
 the authors did not cover, **Qwen3.8-27B**, against unmodified vLLM 0.33.0. Both engines run on the same GPU with the
 same KV memory and the same workload.
 
+**The problem FlashState addresses.** Agent workloads are long multi-turn conversations: every turn resends the whole
+history plus a little new text, such as a tool result. Prefix caching normally makes this cheap, because the server
+reuses the cached history and computes only the new tokens. Hybrid models break that assumption. Their
+linear-attention (Mamba-style) layers keep one recurrent state instead of a per-token cache, and that state can only
+be resumed from a position where it was saved. vLLM saves it only at fixed block boundaries, so every turn
+recomputes everything since the last boundary, including the model's own previous reply. Under memory pressure it
+also evicts states without regard to how expensive they are to rebuild. FlashState saves the state at the exact end
+of each turn and evicts by recompute cost, aiming to make prefix caching on hybrid models as effective as on
+pure-attention models.
+
 ## Results at a glance
 
 *One NVIDIA H200 · Qwen3.8-27B-FP8 · FP8 KV cache · one run per engine · 2026-11-10.*
@@ -117,35 +127,5 @@ Set these in the environment or in `fs.env`, which is git-ignored. The defaults 
 | `FLASHSTATE_FLAGS` | all four | Replaces the switches, for ablations |
 | `ENGINES` | `official flashstate` | Runs only one engine |
 | `HF_TOKEN` | — | Optional; avoids Hugging Face download rate limits |
-
-## Limitations
-
-- This is a single run per engine on a single H200, with one model variant and one seed. There are no repeats and no confidence intervals.
-- The mechanism test is small: 28 later-turn requests per engine.
-- The workload is synthetic random tokens, not natural language. No quality evaluation was run.
-- The eviction coefficients were not calibrated for this model and GPU.
-- The pressure test measures one overload point. It does not show where either engine peaks or collapses.
-- The paper used B200 and GB300. On an H200, FlashState's in-chunk state export falls back from the B200 kernel to
-  FlashInfer's stride checkpoints.
-
-## Next steps
-
-1. `scripts/calibrate.sh`, then rerun `pressure` for FlashState only (`ENGINES=flashstate`).
-2. Repeat both tests 3 or more times to get variance.
-3. Run a trace-replay sweep to find each engine's peak and compare peak-to-peak.
-4. Ablate the four switches individually to attribute the gains.
-5. Investigate output divergence: compare against vLLM run against itself, and test with BF16 weights and KV cache.
-
-## Repository layout
-
-```
-setup.sh              one-time install: upstream clone, environments, weights, traces
-lib.sh                settings, GPU detection, KV sizing, server start/stop
-scripts/ab.sh         mechanism and pressure tests       bench/turns.py, bench/compare.py
-scripts/calibrate.sh  eviction cost coefficients         bench/calibrate_coeffs.py
-scripts/sweep.sh      trace-replay sweep                 scripts/replay.sh, bench/report.py
-tests/                mock server and pipeline test (no GPU needed): bash tests/test_pipeline.sh
-report.md             full write-up of the H200 run
-```
 
 FlashStates, its vLLM fork and the replay client are Apache-2.0. `setup.sh` fetches them rather than copying them here.
