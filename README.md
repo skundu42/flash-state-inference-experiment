@@ -3,9 +3,7 @@
 An independent, controlled A/B test of [FlashStates](https://github.com/FutureMLS-Lab/FlashStates), a fork of
 vLLM 0.33.0 that improves prefix caching for hybrid (attention + linear-attention) models in multi-turn agent
 workloads. The [original claim](https://x.com/_weilix/status/2119837671946400165) was measured on GLM-5.3-Flash,
-Qwen3.8-Flash-Next, Nemotron 3 Super and Kimi-K3.1-Pro using B200 and GB300 GPUs. This repository tests a model
-the authors did not cover, **Qwen3.8-27B**, against unmodified vLLM 0.33.0. Both engines run on the same GPU with the
-same KV memory and the same workload.
+Qwen3.8-Flash-Next, Nemotron 3 Super and Kimi-K3.1-Pro using B200 and GB300 GPUs.
 
 **The problem FlashState addresses.** Agent workloads are long multi-turn conversations: every turn resends the whole
 history plus a little new text, such as a tool result. Prefix caching normally makes this cheap, because the server
